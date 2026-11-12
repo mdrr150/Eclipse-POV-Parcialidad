@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Perspectiva y parcialidad de un eclipse</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f27;--mut:#66707f;--ln:#d9dde4;--earth:#cfe8f7;--earthl:#2b6c99;--sun:#ffd54a;--cone:rgba(255,213,74,.35);--shd:rgba(30,30,50,.55);--moon:#8d93a0;--acc:#e5484d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171c;--card:#1e232b;--tx:#e8ebf0;--mut:#9aa3b2;--ln:#343b47;--earth:#1d3a52;--earthl:#6fb3e0;--cone:rgba(255,213,74,.28);--shd:rgba(0,0,0,.7);--moon:#a9afbb}}
+:root[data-theme="dark"]{--bg:#14171c;--card:#1e232b;--tx:#e8ebf0;--mut:#9aa3b2;--ln:#343b47;--earth:#1d3a52;--earthl:#6fb3e0;--cone:rgba(255,213,74,.28);--shd:rgba(0,0,0,.7);--moon:#a9afbb}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+body{padding:12px;max-width:1100px;margin:auto}
+h1{font-size:1.15rem;margin:4px 0 10px}
+.grid{display:grid;grid-template-columns:1fr 250px;gap:12px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:10px}
+canvas{width:100%;display:block;touch-action:none}
+#main{cursor:grab;height:auto}
+#sky{width:220px;height:220px;margin:auto;border-radius:50%}
+.sl{display:grid;grid-template-columns:1fr auto;font-size:.82rem;color:var(--mut);margin-top:6px}
+.sl b{color:var(--tx);font-weight:600}
+.sl input{grid-column:1/3;width:100%}
+.out{font-size:.9rem;line-height:1.5;margin-top:8px}
+.big{font-size:1.5rem;font-weight:700;color:var(--acc)}
+.warn{color:var(--acc);font-size:.82rem;min-height:1.1em}
+h2{font-size:.85rem;margin:12px 0 0;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+</style></head><body>
+<h1>Cómo la perspectiva cambia la parcialidad de un eclipse</h1>
+<div class="grid">
+ <div class="card"><canvas id="main"></canvas>
+  <div class="out" style="color:var(--mut);font-size:.8rem">Arrastra el punto rojo sobre la Tierra. Zona amarilla: luz que llega al observador. Zona oscura: luz bloqueada por la Luna.</div></div>
+ <div class="card">
+  <canvas id="sky" width="440" height="440"></canvas>
+  <div class="out"><div class="warn" id="warn"></div>
+  Obscuración del disco solar<div class="big" id="obs">0%</div>
+  Luz bloqueada en el esquema 2D: <b id="blk">0%</b></div>
+ </div>
+</div>
+<div class="card" style="margin-top:12px"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))" id="ctl"></div></div>
+<script>
+const P={ang:-18,off:0,Re:100,Rm:20,Rs:40,dm:214,ds:330};
+const AX=14*Math.PI/180, D=Math.PI/180;
+const defs=[['ang','Posición del observador (°)',-180,180,1],['off','Desvío de la Luna',-80,80,1],
+['Re','Radio de la Tierra',40,150,1],['Rm','Radio de la Luna',4,60,1],['Rs','Radio del Sol',10,90,1],
+['dm','Distancia Tierra–Luna',60,500,1],['ds','Distancia Tierra–Sol',150,700,1]];
+const ctl=document.getElementById('ctl');
+defs.forEach(([k,l,mn,mx,st])=>{const d=document.createElement('div');d.className='sl';
+d.innerHTML=`<span>${l}</span><b id="v_${k}"></b><input type="range" id="s_${k}" min="${mn}" max="${mx}" step="${st}" value="${P[k]}">`;
+ctl.appendChild(d);d.querySelector('input').oninput=e=>{P[k]=+e.target.value;render()}});
+const cv=document.getElementById('main'),cx=cv.getContext('2d'),sk=document.getElementById('sky'),sx=sk.getContext('2d');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let T=null;
+const dir=a=>[Math.cos(a),Math.sin(a)];
+const wrap=a=>{while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a};
+function overlap(r1,r2,d){if(d>=r1+r2)return 0;if(d<=Math.abs(r1-r2))return Math.PI*Math.min(r1,r2)**2;
+const a=r1*r1*Math.acos((d*d+r1*r1-r2*r2)/(2*d*r1)),b=r2*r2*Math.acos((d*d+r2*r2-r1*r1)/(2*d*r2));
+return a+b-0.5*Math.sqrt((-d+r1+r2)*(d+r1-r2)*(d-r1+r2)*(d+r1+r2))}
+function render(){
+ defs.forEach(([k])=>{document.getElementById('v_'+k).textContent=P[k];document.getElementById('s_'+k).value=P[k]});
+ const th=P.ang*D,u=dir(AX),v=[-u[1],u[0]];
+ const S=[u[0]*P.ds,u[1]*P.ds],M=[u[0]*P.dm+v[0]*P.off,u[1]*P.dm+v[1]*P.off];
+ const n=dir(th),Pt=[P.Re*n[0],P.Re*n[1]];
+ const ds=Math.hypot(S[0]-Pt[0],S[1]-Pt[1]),dm=Math.hypot(M[0]-Pt[0],M[1]-Pt[1]);
+ const fs=Math.atan2(S[1]-Pt[1],S[0]-Pt[0]),fm=Math.atan2(M[1]-Pt[1],M[0]-Pt[0]);
+ const as=Math.asin(Math.min(1,P.Rs/ds)),am=Math.asin(Math.min(1,P.Rm/dm));
+ const del=wrap(fm-fs),ts=Math.sqrt(Math.max(0,ds*ds-P.Rs**2)),tm=Math.sqrt(Math.max(0,dm*dm-P.Rm**2));
+ // main canvas
+ const W=cv.clientWidth,H=Math.round(W*0.6),r=devicePixelRatio||1;cv.width=W*r;cv.height=H*r;cv.style.height=H+'px';cx.setTransform(r,0,0,r,0,0);
+ const minX=Math.min(-P.Re,M[0]-P.Rm),maxX=Math.max(S[0]+P.Rs,M[0]+P.Rm),minY=Math.min(-P.Re,S[1]-P.Rs,M[1]-P.Rm),maxY=Math.max(P.Re,S[1]+P.Rs,M[1]+P.Rm);
+ const pad=24,k=Math.min((W-2*pad)/(maxX-minX),(H-2*pad)/(maxY-minY));
+ const ox=(W-(maxX-minX)*k)/2,oy=(H-(maxY-minY)*k)/2;
+ const m=(x,y)=>[ox+(x-minX)*k,oy+(maxY-y)*k];T={m,k,minX,maxY,ox,oy};
+ const circ=(c,R,fill,st)=>{const [a,b]=m(c[0],c[1]);cx.beginPath();cx.arc(a,b,R*k,0,7);if(fill){cx.fillStyle=fill;cx.fill()}if(st){cx.strokeStyle=st;cx.lineWidth=1.5;cx.stroke()}};
+ const poly=pts=>{cx.beginPath();pts.forEach((p,i)=>{const q=m(p[0],p[1]);i?cx.lineTo(q[0],q[1]):cx.moveTo(q[0],q[1])});cx.closePath()};
+ const at=(f,t)=>[Pt[0]+t*Math.cos(f),Pt[1]+t*Math.sin(f)];
+ circ([0,0],P.Re,css('--earth'),css('--earthl'));
+ const sA=fs-as,sB=fs+as,mA=fm-am,mB=fm+am;
+ cx.save();poly([Pt,at(sA,ts),at(sB,ts)]);cx.fillStyle=css('--cone');cx.fill();cx.clip();
+ const L=ts*1.5;poly([at(mA,tm),at(mA,L),at(mB,L),at(mB,tm)]);cx.fillStyle=css('--shd');cx.fill();cx.restore();
+ circ(S,P.Rs,css('--sun'),'#c9a000');circ(M,P.Rm,css('--moon'),css('--tx'));
+ cx.strokeStyle='#1a9ae0';cx.lineWidth=1.5;[sA,sB].forEach(f=>{const a=m(...Pt),b=m(...at(f,ts));cx.beginPath();cx.moveTo(...a);cx.lineTo(...b);cx.stroke()});
+ cx.strokeStyle=css('--mut');cx.setLineDash([5,4]);cx.lineWidth=1;cx.beginPath();cx.moveTo(...m(0,0));cx.lineTo(...m(S[0],S[1]));cx.stroke();cx.setLineDash([]);
+ const pp=m(...Pt);cx.beginPath();cx.arc(pp[0],pp[1],7,0,7);cx.fillStyle=css('--acc');cx.fill();cx.strokeStyle='#fff';cx.lineWidth=2;cx.stroke();
+ T.pp=pp;
+ // sky view
+ const sunUp=((S[0]-Pt[0])*n[0]+(S[1]-Pt[1])*n[1])>0;
+ sx.setTransform(2,0,0,2,0,0);sx.clearRect(0,0,220,220);sx.save();sx.beginPath();sx.arc(110,110,110,0,7);sx.clip();
+ sx.fillStyle=sunUp?'#5aa9e6':'#0b1020';sx.fillRect(0,0,220,220);
+ const sc=70/as;sx.beginPath();sx.arc(110,110,70,0,7);sx.fillStyle='#ffd54a';sx.fill();
+ const behind=dm>ds;
+ sx.beginPath();sx.arc(110,110-del*sc,am*sc,0,7);sx.fillStyle='#2a2d35';sx.globalAlpha=behind?0.25:1;sx.fill();sx.restore();
+ let obs=behind?0:overlap(as,am,Math.abs(del))/(Math.PI*as*as);
+ const lo=Math.max(-as,del-am),hi=Math.min(as,del+am),blk=behind?0:Math.max(0,hi-lo)/(2*as);
+ document.getElementById('obs').textContent=(obs*100).toFixed(1)+'%';
+ document.getElementById('blk').textContent=(blk*100).toFixed(1)+'%';
+ document.getElementById('warn').textContent=sunUp?(behind?'La Luna está detrás del Sol.':''):'El Sol está bajo el horizonte del observador.';
+}
+let drag=false;
+function setFrom(e){const b=cv.getBoundingClientRect(),x=e.clientX-b.left,y=e.clientY-b.top;
+ const wx=T.minX+(x-T.ox)/T.k,wy=T.maxY-(y-T.oy)/T.k;P.ang=Math.round(Math.atan2(wy,wx)/D);render()}
+cv.onpointerdown=e=>{drag=true;cv.setPointerCapture(e.pointerId);setFrom(e)};
+cv.onpointermove=e=>{if(drag)setFrom(e)};cv.onpointerup=()=>drag=false;
+addEventListener('resize',render);render();
+</script></body></html>
